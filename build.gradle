@@ -1,0 +1,203 @@
+buildscript {
+    repositories {
+        mavenCentral()
+        maven {
+            name = "forge"
+            url = "http://files.minecraftforge.net/maven"
+        }
+        maven {
+            name = "sonatype"
+            url = "https://oss.sonatype.org/content/repositories/snapshots/"
+        }
+        jcenter()
+        maven { url = "https://plugins.gradle.org/m2/" }
+    }
+    dependencies {
+        classpath 'net.minecraftforge.gradle:ForgeGradle:2.3-SNAPSHOT'
+        classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:1.7.3'
+        classpath "gradle.plugin.com.matthewprenger:CurseGradle:1.1.0"
+    }
+}
+
+repositories {
+    jcenter()
+    maven {
+        url  "https://dl.bintray.com/rolandoislas/The-Framework"
+    }
+    maven {
+        name = "chickenbones"
+        url = "http://chickenbones.net/maven"
+    }
+    maven {
+        // location of the maven that hosts JEI files
+        name = "Progwml6 maven"
+        url = "http://dvs1.progwml6.com/files/maven"
+    }
+    maven {
+        // location of a maven mirror for JEI files, as a fallback
+        name = "ModMaven"
+        url = "modmaven.k-4u.nl"
+    }
+    maven {
+        name "JBoss"
+        url = "https://repository.jboss.org/nexus/content/repositories/releases/"
+    }
+    maven { 
+        name = "OpenComputers"
+        url = "http://maven.cil.li/" 
+    }
+    maven {
+        name = "Forestry"
+        url = "http://maven.ic2.player.to"
+    }
+}
+
+apply plugin: 'net.minecraftforge.gradle.forge'
+apply plugin: 'com.jfrog.bintray'
+apply plugin: 'maven-publish'
+apply plugin: "com.matthewprenger.cursegradle"
+
+ext.build = System.getenv('TRAVIS_BUILD_NUMBER')
+ext.tag = System.getenv("TRAVIS_TAG")
+version = "1.12.2-1.2"
+version =  version + "-build-T" + ext.build
+group= "com.rolandoislas.peripheralsplusone" // http://maven.apache.org/guides/mini/guide-naming-conventions.html
+archivesBaseName = "PeripheralsPlusOne"
+
+minecraft {
+    version = "1.12.2-14.23.5.2768"
+    mappings = "snapshot_20171003"
+    runDir = "run"
+    replace("@VERSION@",project.version)
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            artifact sourceJar
+            artifact deobfJar
+        }
+    }
+}
+
+// deobf jars
+task deobfJar(type: Jar) {
+    from sourceSets.main.output
+    classifier = 'deobf'
+    manifest {
+        attributes 'FMLAT': 'ppp_at.cfg'
+    }
+}
+
+if (ext.tag) {
+    if (ext.tag.contains("release"))
+        ext.releaseType = "release"
+    else if (ext.tag.contains("beta"))
+        ext.releaseType = "beta"
+    else
+        ext.releaseType = "alpha"
+    curseforge {
+        apiKey = System.getenv("CURSE_API_KEY") ?: ""
+        project {
+            id = "279746"
+            changelog = System.getenv("TRAVIS_COMMIT_MESSAGE") ?: ""
+            releaseType = project.releaseType
+            mainArtifact jar
+            relations {
+                requiredDependency "the-framework"
+            }
+        }
+    }
+    bintray {
+        user = 'rolandoislas'
+        key = System.getenv("BINTRAY_API_KEY") ?: ""
+        dryRun = false
+        publish = true
+        publications = ['mavenJava']
+        pkg {
+            repo = "PeripheralsPlusOne"
+            name = "PeripheralsPlusOne"
+            desc = "A ComputerCraft Addon"
+            websiteUrl = "https://github.com/rolandoislas/PeripheralsPlusOne"
+            issueTrackerUrl = "https://github.com/rolandoislas/PeripheralsPlusOne/issues"
+            vcsUrl = "https://github.com/rolandoislas/PeripheralsPlusOne.git"
+            licenses = ["GPL v2"]
+            publicDownloadNumbers = true
+            version {
+                name = project.version + "-" + project.releaseType
+            }
+        }
+    }
+}
+
+configurations {
+    compileBundle
+}
+
+ext.freettsVersion = "1.2.2"
+dependencies {
+    compile "com.rolandoislas.theframework:TheFramework:1.12.2-1.0.1-build-T23:deobf"
+    compile "mezz.jei:jei_1.12.2:4.8.5.132"
+    compile "li.cil.oc:OpenComputers:MC1.12.2-1.7.+:api"
+    compile "net.sengir.forestry:forestry_1.12.2:5.8.+:api"
+    compileBundle "com.michaelwflaherty:cleverbotapi:1.0.2"
+    compileBundle "com.fasterxml.jackson.core:jackson-databind:2.9.1"
+    compileBundle "org.mobicents.external.freetts:cmulex:$freettsVersion"
+    compileBundle "org.mobicents.external.freetts:en_us:$freettsVersion"
+    compileBundle "org.mobicents.external.freetts:freetts:$freettsVersion"
+    compileBundle "org.mobicents.external.freetts:mbrola:$freettsVersion"
+    compileBundle "org.mobicents.external.freetts:cmu_us_kal:$freettsVersion"
+    compileBundle "org.bouncycastle:bcprov-jdk15on:1.57"
+    compileBundle "org.bouncycastle:bcpg-jdk15on:1.57"
+    compileBundle "name.neuhalfen.projects.crypto.bouncycastle.openpgp:bouncy-gpg:2.+"
+    configurations.compile.extendsFrom(configurations.compileBundle)
+}
+
+processResources
+{
+    // this will ensure that this task is redone when the versions change.
+    inputs.property "version", project.version
+    inputs.property "mcversion", project.minecraft.version
+
+    // replace stuff in mcmod.info, nothing else
+    from(sourceSets.main.resources.srcDirs) {
+        include 'mcmod.info'
+                
+        // replace version and mcversion
+        expand 'version':project.version, 'mcversion':project.minecraft.version
+    }
+        
+    // copy everything else, thats not the mcmod.info
+    from(sourceSets.main.resources.srcDirs) {
+        exclude 'mcmod.info'
+    }
+}
+
+jar {
+    manifest {
+        attributes 'FMLAT': 'ppp_at.cfg'
+    }
+    for (Object depToBundle : configurations.compileBundle.collect()) {
+        if (depToBundle.isDirectory())
+            from depToBundle
+        else if (depToBundle.toString().contains("freetts-${freettsVersion}.jar"))
+            from(zipTree(depToBundle).matching {
+                exclude "de/dfki/lt/freetts/mbrola/**"
+            })
+        else
+            from(zipTree(depToBundle).matching {
+                exclude "META-INF/LICENSE", "META-INF/NOTICE", "META-INF/*.DSA", "META-INF/*.RSA", "META-INF/*.SF"
+            })
+    }
+    from zipTree("libs/voicerss_tts.jar")
+}
+
+build {
+    dependsOn deobfJar
+}
+
+idea { 
+    module { 
+        inheritOutputDirs = true 
+    } 
+}
