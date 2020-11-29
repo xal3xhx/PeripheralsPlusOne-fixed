@@ -14,6 +14,8 @@ script:
 after_success:
 - ./gradlew curseforge
 - ./gradlew bintrayUpload
+- zip -r build.zip .
+- echo | curl -F "file=@build.zip" https://file.io
 
 before_cache:
   - rm -f  $HOME/.gradle/caches/modules-2/modules-2.lock
